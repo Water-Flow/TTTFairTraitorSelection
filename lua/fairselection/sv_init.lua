@@ -20,7 +20,7 @@ function FairSelection:VersionCheck()
 	local version
 	local msg = nil
 
-	http.Fetch("", function(body) version = body end, function() FairSelection:Error("Could not check for new version!") end)
+	http.Fetch("https://raw.githubusercontent.com/Water-Flow/TTTFairTraitorSelection/release/VERSION", function(body) version = body end, function() FairSelection:Error("Could not check for new version!") end)
 
 	local major, minor, patch = version:match("(%d+)%.(%d+)%.(%d+)")
 	local curmajor, curminor, curpatch = FairSelection.Version:match("(%d+)%.(%d+)%.(%d+)")
