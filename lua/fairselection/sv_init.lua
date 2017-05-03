@@ -1,0 +1,180 @@
+FairSelection.Version = "1.0.0"
+
+FairSelection:Message("Initialization...")
+FairSelection:VersionCheck()
+FairSelection:LoadConfig()
+FairSelection:Message("Config loaded.")
+FairSelection.DB:Init()
+FairSelection.DB:connect()
+FairSelection:Message("Initialization completed!")
+
+function FairSelection:LoadConfig()
+	local CONFIG = {}
+
+	include("fairselection/sv_config.lua")
+
+	FairSelection.CFG = CONFIG
+end
+
+function FairSelection:VersionCheck()
+	local version
+	local msg = nil
+
+	http.Fetch("", function(body) version = body end, function() FairSelection:Error("Could not check for new version!") end)
+
+	local major, minor, patch = version:match("(%d+)%.(%d+)%.(%d+)")
+	local curmajor, curminor, curpatch = FairSelection.Version:match("(%d+)%.(%d+)%.(%d+)")
+	
+	major = tonumber(major) or 0
+	minor = tonumber(minor) or 0
+	patch = tonumber(patch) or 0
+
+	curmajor = tonumber(curmajor) or 0
+	curminor = tonumber(curminor) or 0
+	curpatch = tonumber(curpatch) or 0
+
+	if curmajor < major or curminor < minor or curpatch < patch then
+		msg = "A new Version is available (%%%%%%%%)"
+	end
+
+	if msg then
+		msg = string.gsub(msg, "%%+", version)
+		FairSelection:Message(msg)
+	end
+end
+
+math.randomseed(os.time())
+local function shuffleTable(t)
+	local rand = math.random
+	local iterations = #t
+	local j
+
+	for i = iteractions, 2, -1 do
+		j = rand(i)
+		t[i], t[j] = t[j], t[i]
+	end
+end
+
+hook.Add("TTTBeginRound", "TTTFS_BeginRound", function()
+	-- Set players role count
+	for _, ply in ipairs(player.GetAll()) do
+		if ply:GetRole() == ROLE_INNOCENT then
+			ply:SetInnocentCount(ply:GetInnocentCount() + 1)
+		elseif ply:GetRole() == ROLE_TRAITOR then
+			ply:SetTraitorCount(ply:GetTraitorCount() + 1)
+		elseif ply:GetRole() == ROLE_DETECTIVE then
+			ply:SetDetectiveCount(ply:GetDetectiveCount() + 1)
+		end
+
+		ply:SetRoundsPlayed(ply:GetRoundsPlayed() + 1)
+
+		FairSelection:UpdatePlayerChance()
+	end
+end)
+
+function FairSelection:SelectPlayerForTraitor(choices, prev_roles)
+	local total = 0
+	local lastChance
+
+	for _, v in pairs(choices) do
+		total = total + v:GetChance()
+	end
+
+	local r = math.random(1, total)
+
+	for _, pply in pairs(choices) do
+		if (r - pply:GetChance()) <= 0 then
+			lastChance = pply
+
+			if IsValid(pply) and ((not table.HasValue(prev_roles[ROLE_TRAITOR], pply)) or (math.random(1, 3) == 2)) then
+				if (not tobool(pply:GetPData("tpass", false)) and not tobool(pply:GetPData("dpass", false)) and not tobool(pply:GetPData("inno", false))) or tobool(pply:GetPData("tpassfail", false)) or tobool(pply:GetPData("dpassfail", false)) then
+					return pply
+				end
+			end
+		end
+
+		r = r - pply:GetChance()
+	end
+
+	return lastChance
+end
+
+function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, prev_roles)
+	local min_karma = GetConVarNumber("ttt_detective_karma_min") or 0
+
+	if not ts then ts = 0 end
+	if not ds then ds = 0 end
+	
+	while ts < traitor_count do
+		shuffleTable(choices)
+
+		selectedPlayer = self:SelectPlayerForTraitor(choices, prev_roles)
+		selectedPlayer:SetRole(ROLE_TRAITOR)
+		selectedPlayer:SetChance(FairSelection:DefaultChance())
+		table.RemoveByValue(choices, selectedPlayer)
+
+		ts = ts + 1
+	end
+
+	while(ds < det_count) and (#choices >= 1) do
+		if #choices <= (det_count - ds) then
+			for _, pply in pairs(choices) do
+				if IsValid(pply) then
+					if (not tobool(pply:GetPData("tpass", false)) and not tobool(pply:GetPData("dpass", false)) and not tobool(pply:GetPData("inno", false))) or tobool(pply:GetPData("tpassfail", false)) or tobool(pply:GetPData("dpassfail", false)) then
+						pply:SetRole(ROLE_DETECTIVE)
+					end
+				end
+			end
+
+			break
+		end
+
+		local pick = math.random(1, #choices)
+		local pply = choices[pick]
+
+		if (IsValid(pply) and ((pply:GetBaseKarma() > min_karma and table.HasValue(prev_roles[ROLE_INNOCENT], pply)) or math.random(1, 3) == 2)) then
+			if pply:GetAvoidDetective() then
+				if (not tobool(pply:GetPData("tpass", false)) and not tobool(pply:GetPData("dpass", false)) and not tobool(pply:GetPData("inno", false))) or tobool(pply:GetPData("tpassfail", false)) or tobool(pply:GetPData("dpassfail", false)) then
+					pply:SetRole(ROLE_DETECTIVE)
+					ds = ds + 1
+				end
+			end
+
+			table.remove(choices, pick)
+		end
+	end
+
+	for _, v in pairs(choices) do
+		if IsValid(v) and (not v:IsSpec()) and v:GetRole() == ROLE_INNOCENT then
+			if FairSelection.CFG.KarmaIncreaseChance and v:GetBaseKarma > FairSelection.CFG.KarmaIncreaseChanceThreshold then
+				local extra = math.random(0, 2)
+				v:AddChance(extra)
+			end
+
+			v:AddChance(math.random(6, 10))
+		end
+	end
+
+	GAMEMODE.LastRole = {}
+
+	for _, ply in ipairs(player.GetAll()) do
+		ply:SetDefaultCredits()
+
+		GAMEMODE.LastRole[ply:UniqueID()] = ply:GetRole()
+	end
+end
+
+hook.Add("PlayerInitialSpawn", "TTFS_PlayerInitialSpawn", function(ply)
+	if not ply:IsBot() then
+		FairSelection.DB:prepare("SELECT chance FROM prefix_chances WHERE steamid=?", {ply:SteamID64()}, function(data)
+			if table.Count(data) > 0 then
+				ply:SetChance(data[1].chance)
+			else
+				local chance = FairSelection:DefaultChance()
+
+				FairSelection.DB:prepare("INSERT INTO prefix_chances (steamid, chance, lastupdate) VALUES(?, ?, ?)", {ply:SteamID64(), chance, os.time()})
+				ply:SetChance(chance)
+			end
+		end)
+	end
+end)
