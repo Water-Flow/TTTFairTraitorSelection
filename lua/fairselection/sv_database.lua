@@ -2,11 +2,11 @@ FairSelection.DB = FairSelection.DB or {}
 local DBHandler = DBHandler or {}
 
 function FairSelection.DB:Init()
-	FairSelection:Message("Initialize database "..string.lower(FairSelection.CFG.DB.Type))
+	FairSelection:Message("Initialize database "..FairSelection.CFG.DB.Type)
 
-	include("fairselection/database/"..string.lower(FairSelection.CFG.DB.Type))
+	HANDLER = {}
+	include("fairselection/database/"..string.lower(FairSelection.CFG.DB.Type)..".lua")
 	DBHandler = HANDLER
-	HANDLER = nil
 
 	DBHandler:Init()
 end
@@ -25,12 +25,13 @@ end
 
 function FairSelection.DB:connect()
 	DBHandler:connect()
+	DBHandler:CreateDatabase()
 end
 
-function FairSelection.DB:query()
-	DBHandler:query()
+function FairSelection.DB:query(sql, callback)
+	DBHandler:query(sql, callback)
 end
 
-function FairSelection.DB:prepare()
-	DBHandler:prepare()
+function FairSelection.DB:prepare(sql, args, callback)
+	DBHandler:prepare(sql, args, callback)
 end
