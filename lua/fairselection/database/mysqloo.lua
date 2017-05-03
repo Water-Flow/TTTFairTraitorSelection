@@ -17,13 +17,12 @@ end
 
 -- Connects to the database
 function HANDLER:connect()
-	local function CONN:onConnected()
+	function CONN:onConnected()
 		FairSelection:Message("Database connection established!")
-
 		HANDLER:CheckTimer()
 	end
 
-	local function CONN:onConnectionFailed(err)
+	function CONN:onConnectionFailed(err)
 		FairSelection:Error("SQL Error: "..err)
 	end
 
@@ -42,13 +41,17 @@ function HANDLER:CheckTimer()
 end
 
 function HANDLER:CreateDatabase()
-
+	self:prepare("SELECT count(*) FROM information_schema.tables WHERE table_name=?", {FairSelection.CFG.DB.Prefix.."chances"}, function(data)
+		if table.Count(data) <= 0 then
+			self:query("CREATE TABLE `prefix_chances` ( `steamid` bigint(19) NOT NULL, `chance` int(11) DEFAULT NULL, `lastupdate` bigint(19) DEFAULT NULL, PRIMARY KEY (`steamid`), UNIQUE KEY `steamid` (`steamid`))")
+		end
+	end)
 end
 
 function HANDLER:query(sql, callback)
 	if not callback then callback = nil end
 
-	local sql = FairSelection.DB:esPrefix(sql)
+	sql = FairSelection.DB:esPrefix(sql)
 	local query = CONN:query(sql)
 
 	if query != nil then
@@ -73,8 +76,8 @@ end
 
 function HANDLER:prepare(sql, args, callback)
 	if not callback then callback = nil end
-	
-	local sql = FairSelection.DB:esPrefix(sql)
+
+	sql = FairSelection.DB:esPrefix(sql)
 	local query = CONN:prepare(sql)
 
 	if query != nil then

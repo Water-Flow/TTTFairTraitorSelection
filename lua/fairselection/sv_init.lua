@@ -1,15 +1,8 @@
 FairSelection.Version = "1.0.0"
 
-FairSelection:Message("Initialization...")
-FairSelection:VersionCheck()
-FairSelection:LoadConfig()
-FairSelection:Message("Config loaded.")
-FairSelection.DB:Init()
-FairSelection.DB:connect()
-FairSelection:Message("Initialization completed!")
-
 function FairSelection:LoadConfig()
-	local CONFIG = {}
+	CONFIG = {}
+	CONFIG.DB = {}
 
 	include("fairselection/sv_config.lua")
 
@@ -17,30 +10,35 @@ function FairSelection:LoadConfig()
 end
 
 function FairSelection:VersionCheck()
-	local version
-	local msg = nil
+	http.Fetch("https://raw.githubusercontent.com/Water-Flow/TTTFairTraitorSelection/release/VERSION", function(body)
+		local msg = nil
+		local version = "0.0.0"
+		version = body
+		local major, minor, patch = version:match("(%d+)%.(%d+)%.(%d+)")
+		local curmajor, curminor, curpatch = FairSelection.Version:match("(%d+)%.(%d+)%.(%d+)")
+		
+		major = tonumber(major) or 0
+		minor = tonumber(minor) or 0
+		patch = tonumber(patch) or 0
 
-	http.Fetch("", function(body) version = body end, function() FairSelection:Error("Could not check for new version!") end)
+		curmajor = tonumber(curmajor) or 0
+		curminor = tonumber(curminor) or 0
+		curpatch = tonumber(curpatch) or 0
 
-	local major, minor, patch = version:match("(%d+)%.(%d+)%.(%d+)")
-	local curmajor, curminor, curpatch = FairSelection.Version:match("(%d+)%.(%d+)%.(%d+)")
-	
-	major = tonumber(major) or 0
-	minor = tonumber(minor) or 0
-	patch = tonumber(patch) or 0
+		if (curmajor < major) or (curminor < minor) or (curpatch < patch) then
+			msg = "A new Version is available (%%%%%%%%)!"
+		else
+			msg = "Version: (%%%%%%%%)"
+		end
 
-	curmajor = tonumber(curmajor) or 0
-	curminor = tonumber(curminor) or 0
-	curpatch = tonumber(curpatch) or 0
-
-	if curmajor < major or curminor < minor or curpatch < patch then
-		msg = "A new Version is available (%%%%%%%%)"
-	end
-
-	if msg then
-		msg = string.gsub(msg, "%%+", version)
-		FairSelection:Message(msg)
-	end
+		if msg then
+			msg = string.gsub(msg, "%%+", version)
+			FairSelection:Message(msg)
+		end
+	end,
+	function()
+		FairSelection:Error("Could not check for new version!")
+	end)
 end
 
 math.randomseed(os.time())
@@ -146,7 +144,7 @@ function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, pr
 
 	for _, v in pairs(choices) do
 		if IsValid(v) and (not v:IsSpec()) and v:GetRole() == ROLE_INNOCENT then
-			if FairSelection.CFG.KarmaIncreaseChance and v:GetBaseKarma > FairSelection.CFG.KarmaIncreaseChanceThreshold then
+			if FairSelection.CFG.KarmaIncreaseChance and v:GetBaseKarma() > FairSelection.CFG.KarmaIncreaseChanceThreshold then
 				local extra = math.random(0, 2)
 				v:AddChance(extra)
 			end
@@ -165,7 +163,7 @@ function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, pr
 end
 
 hook.Add("PlayerInitialSpawn", "TTFS_PlayerInitialSpawn", function(ply)
-	if not ply:IsBot() then
+	if ply:IsTerror() and not ply:IsBot() then
 		FairSelection.DB:prepare("SELECT chance FROM prefix_chances WHERE steamid=?", {ply:SteamID64()}, function(data)
 			if table.Count(data) > 0 then
 				ply:SetChance(data[1].chance)
