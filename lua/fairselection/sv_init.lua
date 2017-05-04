@@ -1,4 +1,4 @@
-FairSelection.Version = "1.0.0"
+FairSelection.Version = "1.1.0"
 
 function FairSelection:LoadConfig()
 	CONFIG = {}
