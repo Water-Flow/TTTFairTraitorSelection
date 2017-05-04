@@ -47,10 +47,12 @@ local function shuffleTable(t)
 	local iterations = #t
 	local j
 
-	for i = iteractions, 2, -1 do
+	for i = iterations , 2, -1 do
 		j = rand(i)
 		t[i], t[j] = t[j], t[i]
 	end
+	
+	return t
 end
 
 hook.Add("TTTBeginRound", "TTTFS_BeginRound", function()
@@ -99,12 +101,9 @@ end
 
 function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, prev_roles)
 	local min_karma = GetConVarNumber("ttt_detective_karma_min") or 0
-
-	if not ts then ts = 0 end
-	if not ds then ds = 0 end
 	
 	while ts < traitor_count do
-		shuffleTable(choices)
+		choices = shuffleTable(choices)
 
 		selectedPlayer = self:SelectPlayerForTraitor(choices, prev_roles)
 		selectedPlayer:SetRole(ROLE_TRAITOR)
@@ -113,7 +112,7 @@ function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, pr
 
 		ts = ts + 1
 	end
-
+	
 	while(ds < det_count) and (#choices >= 1) do
 		if #choices <= (det_count - ds) then
 			for _, pply in pairs(choices) do
@@ -131,7 +130,7 @@ function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, pr
 		local pply = choices[pick]
 
 		if (IsValid(pply) and ((pply:GetBaseKarma() > min_karma and table.HasValue(prev_roles[ROLE_INNOCENT], pply)) or math.random(1, 3) == 2)) then
-			if pply:GetAvoidDetective() then
+			if not pply:GetAvoidDetective() then
 				if (not tobool(pply:GetPData("tpass", false)) and not tobool(pply:GetPData("dpass", false)) and not tobool(pply:GetPData("inno", false))) or tobool(pply:GetPData("tpassfail", false)) or tobool(pply:GetPData("dpassfail", false)) then
 					pply:SetRole(ROLE_DETECTIVE)
 					ds = ds + 1
@@ -152,6 +151,38 @@ function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, pr
 			v:AddChance(math.random(6, 10))
 		end
 	end
+end
+
+function FairSelection:Standalone()
+	local choices = {}
+	local prev_roles = {
+		[ROLE_INNOCENT] = {},
+		[ROLE_TRAITOR] = {},
+		[ROLE_DETECTIVE] = {}
+	}
+
+	if not GAMEMODE.LastRole then GAMEMODE.LastRole = {} end
+	
+	for _, v in pairs(player.GetAll()) do
+		if IsValid(v) and (not v:IsSpec()) then
+			local r = GAMEMODE.LastRole[v:UniqueID()] or v:GetRole() or ROLE_INNOCENT
+			table.insert(prev_roles[r], v)
+			table.insert(choices, v)
+		end
+
+		v:SetRole(ROLE_INNOCENT)
+	end
+
+	local choice_count = #choices
+	local traitor_count = GetTraitorCount(choice_count)
+	local det_count = GetDetectiveCount(choice_count)
+
+	if choice_count == 0 then return end
+
+	local ts = 0
+	local ds = 0
+
+	self:SelectRoles(ts, ds, traitor_count, det_count, choices, prev_roles)
 
 	GAMEMODE.LastRole = {}
 
@@ -163,7 +194,7 @@ function FairSelection:SelectRoles(ts, ds, traitor_count, det_count, choices, pr
 end
 
 hook.Add("PlayerInitialSpawn", "TTFS_PlayerInitialSpawn", function(ply)
-	if ply:IsTerror() and not ply:IsBot() then
+	if not ply:IsBot() then
 		FairSelection.DB:prepare("SELECT chance FROM prefix_chances WHERE steamid=?", {ply:SteamID64()}, function(data)
 			if table.Count(data) > 0 then
 				ply:SetChance(data[1].chance)
@@ -174,5 +205,11 @@ hook.Add("PlayerInitialSpawn", "TTFS_PlayerInitialSpawn", function(ply)
 				ply:SetChance(chance)
 			end
 		end)
+	end
+end)
+
+timer.Simple(5, function()
+	if FairSelection.CFG.Standalone then
+		SelectRoles = FairSelection:Standalone
 	end
 end)
