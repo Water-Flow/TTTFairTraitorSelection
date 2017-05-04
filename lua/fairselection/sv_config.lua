@@ -1,3 +1,5 @@
+CONFIG.Standalone						= false				-- Enables standalone mode
+
 CONFIG.KarmaIncreaseChance				= false				-- Enables karma increased weight. Set CONFIG.KarmaIncreaseChanceThreshold for the minimum karma needed.
 CONFIG.KarmaIncreaseChanceThreshold		= 950				-- Minimum karma for giving very little bonus weight to the player. Has a chance to give 0 extra weight. (default 950, based off of default max karma)
 
