@@ -13,8 +13,8 @@ end
 function FairSelection:GetActivePlayerTotalChance()
 	local total = 0
 
-	for _, ply in ipairs(player.GetAll()) do
-		if IsValid(ply) and (ply:GetChance() ~= nil) and (not ply:IsBot()) then
+	for _, ply in ipairs(player.GetHumans()) do
+		if IsValid(ply) and (ply:GetChance() ~= nil) then
 			total = total + ply:GetChance()
 		end
 	end
@@ -23,9 +23,7 @@ function FairSelection:GetActivePlayerTotalChance()
 end
 
 function FairSelection:UpdatePlayerChance()
-	for _, ply in ipairs(player.GetAll()) do
-		if not ply:IsBot() then
-			FairSelection.DB:prepare("UPDATE prefix_chances SET chance=?, lastupdate=? WHERE steamid=?", {ply:GetChance(), os.time(), ply:SteamID64()})
-		end
+	for _, ply in ipairs(player.GetHumans()) do
+		FairSelection.DB:prepare("UPDATE prefix_chances SET chance=?, lastupdate=? WHERE steamid=?", {ply:GetChance(), os.time(), ply:SteamID64()})
 	end
 end
